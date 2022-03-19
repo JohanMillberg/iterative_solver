@@ -124,64 +124,34 @@ int main(int argc, char *argv[]) {
         #pragma omp parallel num_threads(n_threads)
         {
             #pragma omp for private(i, j)
-            for (i = 1; i < amount_equations; i += 8) {
+            for (i = 1; i < amount_equations; i += 2) {
                 double temp_sum_1 = 0;
-                double temp_sum_2 = 0;
-                double temp_sum_3 = 0;
-                double temp_sum_4 = 0;
 
 
                 for (j = 0; j < amount_equations; j++) {
                     temp_sum_1 = temp_sum_1 + (A[i][j]*x_current[j]);
-                    temp_sum_2 = temp_sum_2 + (A[i+2][j]*x_current[j]);
-                    temp_sum_3 = temp_sum_3 + (A[i+4][j]*x_current[j]);
-                    temp_sum_4 = temp_sum_4 + (A[i+6][j]*x_current[j]);
                 }
 
                 temp_sum_1 = temp_sum_1 - (A[i][i]*x_current[i]);
-                temp_sum_2 = temp_sum_2 - (A[i+2][i+2]*x_current[i+2]);
-                temp_sum_3 = temp_sum_3 - (A[i+4][i+4]*x_current[i+4]);
-                temp_sum_4 = temp_sum_4 - (A[i+6][i+6]*x_current[i+6]);
 
                 double new_val_1 = (1/A[i][i]) * (b[i]-temp_sum_1);
-                double new_val_2 = (1/A[i+2][i+2]) * (b[i+2]-temp_sum_2);
-                double new_val_3 = (1/A[i+4][i+4]) * (b[i+4]-temp_sum_3);
-                double new_val_4 = (1/A[i+6][i+6]) * (b[i+6]-temp_sum_4);
 
                 x_new[i] = new_val_1;
-                x_new[i+2] = new_val_2;
-                x_new[i+4] = new_val_3;
-                x_new[i+6] = new_val_4;
             }
 
         // The even-indexed elements in x_current are updated, utilizing loop unrolling
             #pragma omp for private(i, j)
-            for (i = 0; i < amount_equations; i += 8) {
+            for (i = 0; i < amount_equations; i += 2) {
                 double temp_sum_1 = 0;
-                double temp_sum_2 = 0;
-                double temp_sum_3 = 0;
-                double temp_sum_4 = 0;
 
                 for (j = 0; j < amount_equations; j++) {
                     temp_sum_1 = temp_sum_1 + (A[i][j]*x_new[j]);
-                    temp_sum_2 = temp_sum_2 + (A[i+2][j]*x_new[j]);
-                    temp_sum_3 = temp_sum_3 + (A[i+4][j]*x_new[j]);
-                    temp_sum_4 = temp_sum_4 + (A[i+6][j]*x_new[j]);
                 }
                 temp_sum_1 = temp_sum_1 - (A[i][i]*x_new[i]);
-                temp_sum_2 = temp_sum_2 - (A[i+2][i+2]*x_new[i+2]);
-                temp_sum_3 = temp_sum_3 - (A[i+4][i+4]*x_new[i+4]);
-                temp_sum_4 = temp_sum_4 - (A[i+6][i+6]*x_new[i+6]);
 
                 double new_val_1 = (1/A[i][i]) * (b[i]-temp_sum_1);
-                double new_val_2 = (1/A[i+2][i+2]) * (b[i+2]-temp_sum_2);
-                double new_val_3 = (1/A[i+4][i+4]) * (b[i+4]-temp_sum_3);
-                double new_val_4 = (1/A[i+6][i+6]) * (b[i+6]-temp_sum_4);
 
                 x_current[i] = new_val_1;
-                x_current[i+2] = new_val_2;
-                x_current[i+4] = new_val_3;
-                x_current[i+6] = new_val_4;
             }
         }
 

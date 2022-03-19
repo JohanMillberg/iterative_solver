@@ -3,28 +3,44 @@
 #include <omp.h>
 #include <math.h>
 
+/*
+The purpose of this program is to solve equations systems of N equations using n_threads
+amount of threads. Both of these parameters are provided by the user as input when running
+the program. The program then first utilizes the Jacobi method to update every odd-indexed element
+in the solution vector. Then, the even-indexed elements of the solution vector are updated using
+both the old values and the previously updated values. This algorithm is similar to the
+Gauss Seidel algorithm, but this version is perfectly parallel.
+*/
+
+/**
+ * @brief Generates a pseudo random diagonally dominant coefficient matrix
+ *
+ * @param amount_equations The amount of equations in the system
+ * @return The complete generated matrix
+ */
 double** get_A_matrix(int amount_equations) {
     int i, j;
     double temp_sum;
-    double diagonal_value;
 
     //Generate a random matrix
     double** A = (double**) malloc(amount_equations * sizeof(double*));
     for (i = 0; i < amount_equations; i++) {
         A[i] = malloc(amount_equations * sizeof(double));
+    }
+
+    for (i = 0; i < amount_equations; i++) {
         for (j = i; j < amount_equations; j++) {
             A[i][j] = (double)rand()/RAND_MAX*10.0;
-            A[j][i] = A[j][i];
+            A[j][i] = A[i][j];
         }
     }
 
     //Ensure that matrix is diagonally dominant, necessary for GS.
     for (i = 0; i < amount_equations; i++) {
-        diagonal_value = fabs(A[i][i]);
         temp_sum = 0;
 
         for (j = 0; j < amount_equations; j++) {
-            temp_sum += fabs(A[i][j]);
+            temp_sum = temp_sum + fabs(A[i][j]);
         }
 
         A[i][i] += temp_sum;
@@ -33,12 +49,34 @@ double** get_A_matrix(int amount_equations) {
     return A;
 }
 
+
+
 int main(int argc, char *argv[]) {
+    if (argc < 3) {
+        printf("Syntax to run program is: ./iterative_solver num_equations num_iterations\n");
+        return 0;
+    }
     int i, j;
-    int amount_equations = atoi(argv[1]);
-    double start = omp_get_wtime();
+    const int amount_equations = atoi(argv[1]);
+    const int max_iterations = atoi(argv[2]);
+
+    const int eq_per_loop = 4;
+
+    if (amount_equations % eq_per_loop != 0) {
+        printf("Loop treats %d equations per loop. Amount of equations need to be divisible with %d.\n", eq_per_loop, eq_per_loop);
+        return 0;
+    }
+
     double** A = get_A_matrix(amount_equations);
-    /*
+
+    /* Equations used for debugging below! Expected result is:
+    x_0 = -0.25262
+    x_1 = -0.097055
+    x_2 = 0.13662
+    x_3 = 0.73922
+    */
+
+/* 
     double** A = (double**) malloc(amount_equations * sizeof(double*));
     for (i = 0; i < amount_equations; i++) {
         A[i] = (double*) malloc(amount_equations * sizeof(double));
@@ -65,72 +103,80 @@ int main(int argc, char *argv[]) {
     b[1] = 0; //b1
     b[2] = 1; //b2
     b[3] = 12;//b3
-    */
+ */
+
     double* b = (double*) malloc(amount_equations * sizeof(double));
     for (i = 0; i < amount_equations; i++) {
-        b[i] = (double)rand()/RAND_MAX*10.0;
+        b[i] = (double)rand()/RAND_MAX*1000.0;
     }
 
-    double change = 0;
-    double threshold = 0.00001;
-
+    double* x_new = malloc(amount_equations * sizeof(double));
     double* x_current = malloc(amount_equations*sizeof(double));
     for (int i = 0; i < amount_equations; i++) {
         x_current[i] = 0;
+        x_new[i] = 0;
     }
-    double* x_new = malloc((amount_equations/2)*sizeof(double));
-    double temp_sum;
-    double new_val;
-    int counter;
 
-    do {
+    double start = omp_get_wtime();
+    int iter;
+    for (iter = 0; iter < max_iterations; iter++){
+
+        /*
         printf("Pre Jacobi: ");
         for (i = 0; i < amount_equations; i++) {
             printf("x_%d = %lf ", i, x_current[i]);
         }
         printf("\n");
+        */
+
         // The odd-indexed elements in x_current are updated using Jacobi
-        change = 0;
         for (i = 1; i < amount_equations; i += 2) {
-            temp_sum = 0;
-            for (j = 0; j < amount_equations; j++) {
-                if (i != j) {
-                    temp_sum += (A[i][j]*x_current[j]);
-                }
+            double temp_sum = 0;
+            for (j = 0; j < amount_equations; j++) { //Auto
+                temp_sum = temp_sum + (A[i][j]*x_current[j]);
             }
-            new_val = (1/A[i][i]) * (b[i]-temp_sum);
-            change += (x_current[i] - new_val)*(x_current[i] - new_val);
-            x_new[(i-1)/2] = new_val;
+            temp_sum = temp_sum - (A[i][i]*x_current[i]);
+            double new_val = (1/A[i][i]) * (b[i]-temp_sum);
+            x_new[i] = new_val;
         }
 
-        // Update the new values in x_current
-        counter = 0;
-        for (i = 1; i < amount_equations; i += 2) {
-            x_current[i] = x_new[counter];
-            counter++;
-        }
-
+        /*
         printf("Pre GS: ");
         for (i = 0; i < amount_equations; i++) {
             printf("x_%d = %lf ", i, x_current[i]);
         }
         printf("\n\n");
-        // The even-indexed elements in x_current are updated using Gauss-Seidel
+        */
+
         for (i = 0; i < amount_equations; i += 2) {
-            temp_sum = 0;
+            double temp_sum = 0;
             for (j = 0; j < amount_equations; j++) {
-                if (i != j) {
-                    temp_sum += (A[i][j]*x_current[j]);
-                }
+                temp_sum = temp_sum + (A[i][j]*x_new[j]);
             }
-            new_val = (1/A[i][i]) * (b[i]-temp_sum);
-            change = (x_current[i] - new_val)*(x_current[i] - new_val);
+            temp_sum = temp_sum - (A[i][i]*x_new[i]);
+            double new_val = (1/A[i][i]) * (b[i]-temp_sum);
             x_current[i] = new_val;
         }
 
-    } while (change > threshold);
+        // Synchs the two arrays
+        for (i = 1; i < amount_equations; i+=2) {
+            x_current[i] = x_new[i];
+            x_new[i-1] = x_current[i-1];
+        }
+
+    }
+
+    //Prints all results for debugging purposes
+
+/*
     for (int i = 0; i < amount_equations; i++) {
         printf("x_%d = %lf\n", i, x_current[i]);
+    }
+*/
+
+
+    for (int i = 0; i < amount_equations; i++) {
+        free(A[i]);
     }
     free(A);
     free(x_new);

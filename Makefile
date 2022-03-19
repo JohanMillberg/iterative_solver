@@ -1,4 +1,4 @@
-CFLAGS=-Wall -O3 -march=native
+CFLAGS=-Wall -O3 -ffast-math
 LDFLAGS=
 
 iterative_solver: iterative_solver.o
